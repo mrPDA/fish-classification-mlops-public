@@ -1,0 +1,76 @@
+# ========================================
+# Yandex Cloud Configuration
+# ========================================
+
+service_account_key_file = "path/to/your/key.json"
+cloud_id                  = "your-cloud-id"
+folder_id                 = "your-folder-id"
+zone                      = "ru-central1-a"
+environment               = "production"
+
+# ========================================
+# SSH Configuration
+# ========================================
+
+ssh_public_key_path = "~/.ssh/id_rsa.pub"
+ssh_user            = "ubuntu"
+
+# ========================================
+# PostgreSQL Passwords
+# ========================================
+
+postgres_airflow_password = "change-this-strong-password-123"
+postgres_mlops_password   = "change-this-strong-password-456"
+
+# ========================================
+# Kubernetes Configuration
+# ========================================
+
+k8s_version            = "1.28"
+use_preemptible_nodes  = true  # false для production
+
+# API Workers
+k8s_api_memory        = 8
+k8s_api_cores         = 4
+k8s_api_disk_size     = 64
+k8s_api_min_nodes     = 2
+k8s_api_max_nodes     = 10
+k8s_api_initial_nodes = 3
+
+# Kafka Workers
+k8s_kafka_memory    = 8
+k8s_kafka_cores     = 4
+k8s_kafka_disk_size = 96
+k8s_kafka_nodes     = 3
+
+# ========================================
+# ML Configuration
+# ========================================
+
+num_classes = 17  # Red Sea fish species
+model_type  = "efficientnet-b4"
+image_size  = 224
+
+# ========================================
+# Managed Airflow
+# ========================================
+
+airflow_version           = "2.8"
+airflow_admin_password    = "change-this-airflow-admin-password"
+airflow_webserver_preset  = "c1-m4"
+airflow_scheduler_preset  = "c1-m4"
+airflow_worker_preset     = "c2-m8"
+airflow_min_workers       = 1
+airflow_max_workers       = 5
+
+# ========================================
+# VMs for MLflow & Grafana
+# ========================================
+
+mlflow_vm_cores      = 2
+mlflow_vm_memory     = 4
+mlflow_vm_disk_size  = 50
+
+grafana_vm_cores     = 2
+grafana_vm_memory    = 4
+grafana_vm_disk_size = 30

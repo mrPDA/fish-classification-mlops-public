@@ -1,0 +1,167 @@
+#cloud-config
+
+package_update: true
+package_upgrade: false
+
+packages:
+  - apt-transport-https
+  - software-properties-common
+  - wget
+  - curl
+  - jq
+
+write_files:
+  - path: /tmp/install-grafana.sh
+    permissions: '0755'
+    content: |
+      #!/bin/bash
+      set -e
+      
+      # Redirect all output to log
+      exec > /var/log/grafana-setup.log 2>&1
+      
+      echo "========================================" 
+      echo "🚀 Starting Grafana Installation"
+      echo "Started at: $(date)"
+      echo "========================================" 
+      
+      # Download Grafana
+      echo "📦 Downloading Grafana DEB package..."
+      cd /tmp
+      wget -q https://dl.grafana.com/oss/release/grafana_11.3.0_amd64.deb
+      echo "✅ Download complete"
+      
+      # Install Grafana
+      echo "📦 Installing Grafana..."
+      DEBIAN_FRONTEND=noninteractive dpkg -i grafana_11.3.0_amd64.deb || apt-get install -f -y
+      echo "✅ Grafana installed"
+      
+      # Install plugins
+      echo "🔌 Installing Grafana plugins..."
+      grafana-cli plugins install marcusolsson-json-datasource
+      grafana-cli plugins install grafana-piechart-panel
+      grafana-cli plugins install grafana-clock-panel
+      echo "✅ Plugins installed"
+      
+      # Create datasources config
+      echo "⚙️  Configuring datasources..."
+      mkdir -p /etc/grafana/provisioning/datasources
+      cat > /etc/grafana/provisioning/datasources/datasources.yaml <<'EOF'
+      apiVersion: 1
+      
+      datasources:
+        - name: MLflow
+          type: marcusolsson-json-datasource
+          access: proxy
+          url: http://${mlflow_ip}:5000
+          isDefault: false
+          jsonData:
+            tlsSkipVerify: true
+          editable: true
+        
+        - name: Airflow PostgreSQL
+          type: postgres
+          access: proxy
+          url: ${postgres_host}:6432
+          database: airflow
+          user: airflow
+          secureJsonData:
+            password: '${postgres_password}'
+          jsonData:
+            sslmode: require
+            postgresVersion: 1400
+            timescaledb: false
+          editable: true
+        
+        - name: Prometheus
+          type: prometheus
+          access: proxy
+          url: http://localhost:9090
+          isDefault: true
+          editable: true
+      EOF
+      chown grafana:grafana /etc/grafana/provisioning/datasources/datasources.yaml
+      echo "✅ Datasources configured"
+      
+      # Create dashboards provisioning
+      echo "⚙️  Configuring dashboards..."
+      mkdir -p /etc/grafana/provisioning/dashboards
+      mkdir -p /var/lib/grafana/dashboards
+      cat > /etc/grafana/provisioning/dashboards/dashboards.yaml <<'EOF'
+      apiVersion: 1
+      
+      providers:
+        - name: 'ML Infrastructure'
+          orgId: 1
+          folder: 'ML Monitoring'
+          type: file
+          disableDeletion: false
+          updateIntervalSeconds: 30
+          allowUiUpdates: true
+          options:
+            path: /var/lib/grafana/dashboards
+      EOF
+      chown grafana:grafana /etc/grafana/provisioning/dashboards/dashboards.yaml
+      chown -R grafana:grafana /var/lib/grafana/dashboards
+      echo "✅ Dashboards provisioning configured"
+      
+      # Start service
+      echo "🚀 Starting Grafana service..."
+      systemctl daemon-reload
+      systemctl enable grafana-server
+      systemctl start grafana-server
+      
+      # Wait for service to start
+      echo "⏳ Waiting for Grafana to start..."
+      sleep 10
+      
+      # Check status
+      if systemctl is-active --quiet grafana-server; then
+        echo "✅ Grafana service is running"
+        systemctl status grafana-server --no-pager
+      else
+        echo "❌ Grafana service failed to start"
+        systemctl status grafana-server --no-pager
+        exit 1
+      fi
+      
+      # Test health endpoint
+      echo "🔍 Testing Grafana health endpoint..."
+      for i in {1..30}; do
+        if curl -s http://localhost:3000/api/health > /dev/null 2>&1; then
+          echo "✅ Grafana is responding!"
+          curl -s http://localhost:3000/api/health
+          break
+        fi
+        echo "   Attempt $i/30 - waiting..."
+        sleep 2
+      done
+      
+      echo ""
+      echo "========================================" 
+      echo "✅ Grafana Installation Complete!"
+      echo "Completed at: $(date)"
+      echo "========================================" 
+      echo ""
+      echo "📊 Access Grafana at: http://$(curl -s ifconfig.me):3000"
+      echo "👤 Username: admin"
+      echo "🔑 Password: admin"
+      echo ""
+      echo "📋 Configured Data Sources:"
+      echo "  • MLflow API (http://${mlflow_ip}:5000)"
+      echo "  • Airflow PostgreSQL (${postgres_host}:6432)"
+      echo "  • Prometheus (localhost:9090)"
+      echo ""
+      echo "========================================" 
+
+runcmd:
+  - /tmp/install-grafana.sh
+
+final_message: |
+  ========================================
+  🎉 Cloud-Init Complete!
+  ========================================
+  
+  Grafana setup finished.
+  Check logs: /var/log/grafana-setup.log
+  ========================================

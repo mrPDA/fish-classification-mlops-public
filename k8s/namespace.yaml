@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ml-inference
+  labels:
+    name: ml-inference
+    project: fish-classification
+    component: inference
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kafka-system
+  labels:
+    name: kafka-system
+    project: fish-classification
+    component: messaging

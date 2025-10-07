@@ -1,0 +1,120 @@
+# ========================================
+# Yandex Lockbox для секретов Airflow
+# ========================================
+# Этот файл показывает, как использовать Lockbox для передачи секретов в Airflow
+# Переименуйте в lockbox.tf для активации
+
+# ========================================
+# Создание секрета в Lockbox
+# ========================================
+
+resource "yandex_lockbox_secret" "airflow_secrets" {
+  name        = "${local.project_name}-${local.suffix}-airflow-secrets"
+  description = "Secrets for Airflow DAGs"
+  folder_id   = var.folder_id
+
+  labels = local.common_labels
+}
+
+# ========================================
+# Версия секрета с данными
+# ========================================
+
+resource "yandex_lockbox_secret_version" "airflow_secrets_v1" {
+  secret_id = yandex_lockbox_secret.airflow_secrets.id
+
+  entries {
+    key        = "S3_ACCESS_KEY"
+    text_value = yandex_iam_service_account_static_access_key.s3_key.access_key
+  }
+
+  entries {
+    key        = "S3_SECRET_KEY"
+    text_value = yandex_iam_service_account_static_access_key.s3_key.secret_key
+  }
+
+  entries {
+    key        = "POSTGRES_AIRFLOW_PASSWORD"
+    text_value = var.postgres_airflow_password
+  }
+
+  entries {
+    key        = "MLFLOW_TRACKING_URI"
+    text_value = "http://${yandex_compute_instance.mlflow.network_interface.0.ip_address}:5000"
+  }
+
+  # Добавьте другие секреты по необходимости
+  entries {
+    key        = "CLOUD_ID"
+    text_value = var.cloud_id
+  }
+
+  entries {
+    key        = "FOLDER_ID"
+    text_value = var.folder_id
+  }
+
+  entries {
+    key        = "S3_BUCKET_NAME"
+    text_value = yandex_storage_bucket.data.bucket
+  }
+
+  entries {
+    key        = "DATAPROC_SERVICE_ACCOUNT_ID"
+    text_value = yandex_iam_service_account.s3_sa.id
+  }
+}
+
+# ========================================
+# Права доступа для Airflow SA к Lockbox
+# ========================================
+
+resource "yandex_lockbox_secret_iam_binding" "airflow_access" {
+  secret_id = yandex_lockbox_secret.airflow_secrets.id
+  role      = "lockbox.payloadViewer"
+
+  members = [
+    "serviceAccount:${yandex_iam_service_account.s3_sa.id}",
+  ]
+}
+
+# ========================================
+# Обновление Airflow для использования Lockbox
+# ========================================
+
+# В airflow.tf добавьте:
+# 
+# resource "yandex_airflow_cluster" "main" {
+#   # ... другие настройки ...
+#   
+#   lockbox_secrets_backend = {
+#     enabled = true
+#   }
+# }
+
+# ========================================
+# Использование в DAG
+# ========================================
+
+# В вашем DAG файле:
+#
+# from airflow.models import Variable
+#
+# # Airflow автоматически получит значения из Lockbox
+# s3_access_key = Variable.get("S3_ACCESS_KEY")
+# s3_secret_key = Variable.get("S3_SECRET_KEY")
+# cloud_id = Variable.get("CLOUD_ID")
+
+# ========================================
+# Outputs
+# ========================================
+
+output "lockbox_secret_id" {
+  description = "Lockbox Secret ID"
+  value       = yandex_lockbox_secret.airflow_secrets.id
+}
+
+output "lockbox_secret_name" {
+  description = "Lockbox Secret Name"
+  value       = yandex_lockbox_secret.airflow_secrets.name
+}

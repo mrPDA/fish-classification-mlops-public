@@ -1,0 +1,146 @@
+#cloud-config
+
+# Prometheus Monitoring Auto-Setup Script
+# Автоматическая установка и настройка Prometheus
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - wget
+  - tar
+
+write_files:
+  # Prometheus configuration
+  - path: /etc/prometheus/prometheus.yml
+    content: |
+      global:
+        scrape_interval: 15s
+        evaluation_interval: 15s
+        external_labels:
+          cluster: 'fish-classification'
+          environment: 'production'
+
+      scrape_configs:
+        # Prometheus itself
+        - job_name: 'prometheus'
+          static_configs:
+            - targets: ['localhost:9090']
+
+        # Node exporter (system metrics)
+        - job_name: 'node'
+          static_configs:
+            - targets: ['localhost:9100']
+    permissions: '0644'
+    owner: root:root
+
+  # Prometheus systemd service
+  - path: /etc/systemd/system/prometheus.service
+    content: |
+      [Unit]
+      Description=Prometheus
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      User=prometheus
+      Group=prometheus
+      ExecStart=/usr/local/bin/prometheus \
+        --config.file=/etc/prometheus/prometheus.yml \
+        --storage.tsdb.path=/var/lib/prometheus/ \
+        --web.console.templates=/etc/prometheus/consoles \
+        --web.console.libraries=/etc/prometheus/console_libraries \
+        --web.listen-address=0.0.0.0:9090 \
+        --web.enable-lifecycle
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+    owner: root:root
+
+  # Node Exporter systemd service
+  - path: /etc/systemd/system/node_exporter.service
+    content: |
+      [Unit]
+      Description=Node Exporter
+      Wants=network-online.target
+      After=network-online.target
+
+      [Service]
+      Type=simple
+      User=node_exporter
+      Group=node_exporter
+      ExecStart=/usr/local/bin/node_exporter \
+        --web.listen-address=:9100
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+    owner: root:root
+
+runcmd:
+  # Create users
+  - useradd --no-create-home --shell /bin/false prometheus || true
+  - useradd --no-create-home --shell /bin/false node_exporter || true
+  
+  # Create directories
+  - mkdir -p /etc/prometheus
+  - mkdir -p /var/lib/prometheus
+  - chown prometheus:prometheus /etc/prometheus
+  - chown prometheus:prometheus /var/lib/prometheus
+  
+  # Download and install Prometheus
+  - cd /tmp
+  - wget -q https://github.com/prometheus/prometheus/releases/download/v2.45.0/prometheus-2.45.0.linux-amd64.tar.gz
+  - tar xzf prometheus-2.45.0.linux-amd64.tar.gz
+  - cp prometheus-2.45.0.linux-amd64/prometheus /usr/local/bin/
+  - cp prometheus-2.45.0.linux-amd64/promtool /usr/local/bin/
+  - cp -r prometheus-2.45.0.linux-amd64/consoles /etc/prometheus/
+  - cp -r prometheus-2.45.0.linux-amd64/console_libraries /etc/prometheus/
+  - chown -R prometheus:prometheus /etc/prometheus/consoles
+  - chown -R prometheus:prometheus /etc/prometheus/console_libraries
+  - chown prometheus:prometheus /usr/local/bin/prometheus
+  - chown prometheus:prometheus /usr/local/bin/promtool
+  - rm -rf /tmp/prometheus-2.45.0.linux-amd64*
+  
+  # Download and install Node Exporter
+  - cd /tmp
+  - wget -q https://github.com/prometheus/node_exporter/releases/download/v1.6.1/node_exporter-1.6.1.linux-amd64.tar.gz
+  - tar xzf node_exporter-1.6.1.linux-amd64.tar.gz
+  - cp node_exporter-1.6.1.linux-amd64/node_exporter /usr/local/bin/
+  - chown node_exporter:node_exporter /usr/local/bin/node_exporter
+  - rm -rf /tmp/node_exporter-1.6.1.linux-amd64*
+  
+  # Set permissions on config
+  - chown prometheus:prometheus /etc/prometheus/prometheus.yml
+  
+  # Start services
+  - systemctl daemon-reload
+  - systemctl enable node_exporter
+  - systemctl start node_exporter
+  - systemctl enable prometheus
+  - systemctl start prometheus
+  
+  # Wait and check status
+  - sleep 10
+  - systemctl status prometheus --no-pager || true
+  - systemctl status node_exporter --no-pager || true
+
+final_message: |
+  ✅ Prometheus successfully installed!
+  
+  🌐 Prometheus UI: http://$(curl -s ifconfig.me):9090
+  📊 Node Exporter: http://localhost:9100/metrics
+  
+  Check status:
+    - systemctl status prometheus
+    - systemctl status node_exporter
+  
+  View logs:
+    - journalctl -u prometheus -f
+    - journalctl -u node_exporter -f

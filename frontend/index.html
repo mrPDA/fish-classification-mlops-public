@@ -1,0 +1,317 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🐟 Fish Classification - Определение вида рыбы</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        :root {
+            --primary-color: #0d6efd;
+            --secondary-color: #6c757d;
+            --success-color: #198754;
+            --info-color: #0dcaf0;
+            --ocean-blue: #006994;
+            --ocean-light: #4da6c7;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding: 2rem 0;
+        }
+
+        .main-container {
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .card {
+            border: none;
+            border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+            margin-bottom: 2rem;
+        }
+
+        .card-header {
+            background: linear-gradient(135deg, var(--ocean-blue) 0%, var(--ocean-light) 100%);
+            color: white;
+            border-radius: 20px 20px 0 0 !important;
+            padding: 2rem;
+            text-align: center;
+        }
+
+        .card-header h1 {
+            font-size: 2.5rem;
+            font-weight: bold;
+            margin: 0;
+        }
+
+        .upload-area {
+            border: 3px dashed #ccc;
+            border-radius: 15px;
+            padding: 3rem;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            background: #f8f9fa;
+        }
+
+        .upload-area:hover {
+            border-color: var(--primary-color);
+            background: #e7f3ff;
+        }
+
+        .upload-area.dragover {
+            border-color: var(--success-color);
+            background: #d1f2eb;
+        }
+
+        .upload-icon {
+            font-size: 4rem;
+            color: var(--primary-color);
+            margin-bottom: 1rem;
+        }
+
+        .preview-container {
+            display: none;
+            text-align: center;
+            margin-top: 2rem;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 400px;
+            border-radius: 15px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+        }
+
+        .result-container {
+            display: none;
+            margin-top: 2rem;
+        }
+
+        .species-card {
+            background: white;
+            border-radius: 15px;
+            padding: 2rem;
+            margin-top: 1rem;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+
+        .confidence-bar {
+            height: 30px;
+            border-radius: 15px;
+            background: linear-gradient(90deg, var(--success-color) 0%, var(--info-color) 100%);
+            transition: width 0.5s ease;
+        }
+
+        .loading-spinner {
+            display: none;
+            text-align: center;
+            margin: 2rem 0;
+        }
+
+        .btn-analyze {
+            background: linear-gradient(135deg, var(--ocean-blue) 0%, var(--ocean-light) 100%);
+            border: none;
+            padding: 1rem 3rem;
+            font-size: 1.2rem;
+            font-weight: bold;
+            border-radius: 50px;
+            color: white;
+            transition: transform 0.2s;
+        }
+
+        .btn-analyze:hover {
+            transform: scale(1.05);
+            box-shadow: 0 5px 20px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-analyze:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+        }
+
+        .info-section {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 15px;
+            margin-top: 1rem;
+        }
+
+        .species-info {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1rem;
+        }
+
+        .species-icon {
+            font-size: 3rem;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-top: 1rem;
+        }
+
+        .stat-card {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 1.5rem;
+            border-radius: 10px;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: bold;
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            opacity: 0.9;
+        }
+
+        .footer {
+            text-align: center;
+            color: white;
+            margin-top: 3rem;
+            padding: 1rem;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+
+        .pulse {
+            animation: pulse 2s infinite;
+        }
+    </style>
+</head>
+<body>
+    <div class="main-container">
+        <!-- Header Card -->
+        <div class="card">
+            <div class="card-header">
+                <h1><i class="fas fa-fish"></i> Fish Classification</h1>
+                <p class="mb-0">Загрузите фото рыбы и узнайте её вид за секунды!</p>
+            </div>
+            <div class="card-body">
+                <!-- Upload Area -->
+                <div class="upload-area" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt upload-icon"></i>
+                    <h3>Перетащите изображение сюда</h3>
+                    <p class="text-muted">или нажмите для выбора файла</p>
+                    <p class="text-muted"><small>Поддерживаются форматы: JPG, PNG (макс. 10MB)</small></p>
+                    <input type="file" id="fileInput" accept="image/*" style="display: none;">
+                </div>
+
+                <!-- Image Preview -->
+                <div class="preview-container" id="previewContainer">
+                    <img id="previewImage" class="preview-image" alt="Preview">
+                    <div class="mt-3">
+                        <button class="btn btn-analyze" id="analyzeBtn">
+                            <i class="fas fa-magic"></i> Определить вид рыбы
+                        </button>
+                        <button class="btn btn-secondary" id="resetBtn">
+                            <i class="fas fa-redo"></i> Выбрать другое фото
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading Spinner -->
+                <div class="loading-spinner" id="loadingSpinner">
+                    <div class="spinner-border text-primary" role="status" style="width: 4rem; height: 4rem;">
+                        <span class="visually-hidden">Анализ...</span>
+                    </div>
+                    <h4 class="mt-3">Анализируем изображение...</h4>
+                    <p class="text-muted">Наша нейросеть определяет вид рыбы</p>
+                </div>
+
+                <!-- Results -->
+                <div class="result-container" id="resultContainer">
+                    <div class="species-card">
+                        <div class="species-info">
+                            <div class="species-icon">🐟</div>
+                            <div>
+                                <h2 id="speciesName">-</h2>
+                                <p class="text-muted mb-0">Научное название</p>
+                            </div>
+                        </div>
+
+                        <div class="info-section">
+                            <h5><i class="fas fa-chart-bar"></i> Уверенность модели</h5>
+                            <div class="progress" style="height: 30px; border-radius: 15px;">
+                                <div class="progress-bar confidence-bar" id="confidenceBar" role="progressbar" 
+                                     style="width: 0%;" aria-valuenow="0" aria-valuemin="0" aria-valuemax="100">
+                                    <span id="confidenceText" style="line-height: 30px; font-weight: bold;">0%</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="stats-grid mt-3">
+                            <div class="stat-card">
+                                <div class="stat-value" id="processingTime">-</div>
+                                <div class="stat-label">Время обработки (мс)</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="speciesId">-</div>
+                                <div class="stat-label">ID вида</div>
+                            </div>
+                            <div class="stat-card">
+                                <div class="stat-value" id="cacheStatus">-</div>
+                                <div class="stat-label">Статус кэша</div>
+                            </div>
+                        </div>
+
+                        <div class="info-section mt-3">
+                            <h5><i class="fas fa-info-circle"></i> О виде</h5>
+                            <p id="speciesDescription">Загрузка информации...</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Card -->
+        <div class="card">
+            <div class="card-body">
+                <h4><i class="fas fa-question-circle"></i> Как это работает?</h4>
+                <div class="row mt-3">
+                    <div class="col-md-4 text-center mb-3">
+                        <i class="fas fa-upload fa-3x text-primary mb-2"></i>
+                        <h5>1. Загрузите</h5>
+                        <p class="text-muted">Выберите фото рыбы с вашего устройства</p>
+                    </div>
+                    <div class="col-md-4 text-center mb-3">
+                        <i class="fas fa-brain fa-3x text-success mb-2"></i>
+                        <h5>2. Анализ</h5>
+                        <p class="text-muted">Нейросеть обрабатывает изображение</p>
+                    </div>
+                    <div class="col-md-4 text-center mb-3">
+                        <i class="fas fa-check-circle fa-3x text-info mb-2"></i>
+                        <h5>3. Результат</h5>
+                        <p class="text-muted">Получите название вида и уверенность</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p><i class="fas fa-code"></i> Powered by MLOps Pipeline</p>
+        <p><small>Kubernetes · Kafka · MLflow · FastAPI · TensorFlow</small></p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
+

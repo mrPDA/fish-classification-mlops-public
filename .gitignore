@@ -1,0 +1,105 @@
+# Terraform
+*.tfstate
+*.tfstate.*
+*.tfvars
+!terraform.tfvars.example
+.terraform/
+.terraform.lock.hcl
+tfplan
+*.log
+
+# SSH Keys
+*.pem
+*.key
+*.pub
+ssh_keys/
+sa-key.json
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+*.log
+
+# Virtual Environment
+venv/
+ENV/
+env/
+.venv
+
+# Jupyter Notebook
+.ipynb_checkpoints
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# MLflow
+mlruns/
+mlartifacts/
+
+# Datasets (too large for git)
+datasets_final/
+data/
+*.zip
+*.tar.gz
+
+# Kubernetes secrets
+*-secret.yaml
+*-credentials.yaml
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+
+# Logs
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Cloud
+.terraform.d/
+*.backup
+
+# Models (binary files)
+*.h5
+*.pkl
+*.joblib
+*.onnx
+*.pb
+
+# Airflow
+airflow.cfg
+airflow.db
+airflow-webserver.pid
+unittests.cfg
+
+# Docker
+*.tar
+

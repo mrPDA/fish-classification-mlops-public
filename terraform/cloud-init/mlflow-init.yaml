@@ -1,0 +1,112 @@
+#cloud-config
+
+# MLflow Server Auto-Setup Script
+# Автоматическая установка и настройка MLflow Tracking Server
+
+package_update: true
+package_upgrade: true
+
+packages:
+  - python3-pip
+  - python3-venv
+  - postgresql-client
+  - nginx
+  - supervisor
+
+write_files:
+  # Systemd service для MLflow
+  - path: /etc/systemd/system/mlflow.service
+    content: |
+      [Unit]
+      Description=MLflow Tracking Server
+      After=network.target
+
+      [Service]
+      Type=simple
+      User=mlflow
+      WorkingDirectory=/opt/mlflow
+      EnvironmentFile=/opt/mlflow/.env
+      ExecStart=/opt/mlflow/venv/bin/mlflow server \
+        --backend-store-uri postgresql://$${POSTGRES_USER}:$${POSTGRES_PASSWORD}@$${POSTGRES_HOST}:6432/$${POSTGRES_DB} \
+        --default-artifact-root s3://$${S3_BUCKET}/mlflow-artifacts/ \
+        --host 0.0.0.0 \
+        --port 5000
+      Restart=always
+      RestartSec=10
+
+      [Install]
+      WantedBy=multi-user.target
+    permissions: '0644'
+    owner: root:root
+
+  # Nginx reverse proxy для MLflow
+  - path: /etc/nginx/sites-available/mlflow
+    content: |
+      server {
+          listen 80;
+          server_name _;
+
+          location / {
+              proxy_pass http://localhost:5000;
+              proxy_set_header Host $${host};
+              proxy_set_header X-Real-IP $${remote_addr};
+              proxy_set_header X-Forwarded-For $${proxy_add_x_forwarded_for};
+              proxy_set_header X-Forwarded-Proto $${scheme};
+          }
+      }
+    permissions: '0644'
+    owner: root:root
+
+runcmd:
+  # Создаём пользователя mlflow
+  - useradd -m -s /bin/bash mlflow || true
+  
+  # Создаём директорию и устанавливаем права
+  - mkdir -p /opt/mlflow
+  - chown mlflow:mlflow /opt/mlflow
+  
+  # Создаём .env файл с переменными окружения
+  - |
+    cat > /opt/mlflow/.env << 'EOF'
+    POSTGRES_HOST=${postgres_host}
+    POSTGRES_DB=${postgres_db}
+    POSTGRES_USER=${postgres_user}
+    POSTGRES_PASSWORD=${postgres_password}
+    S3_BUCKET=${s3_bucket}
+    AWS_ACCESS_KEY_ID=${s3_access_key}
+    AWS_SECRET_ACCESS_KEY=${s3_secret_key}
+    MLFLOW_S3_ENDPOINT_URL=${s3_endpoint}
+    EOF
+  - chown mlflow:mlflow /opt/mlflow/.env
+  - chmod 600 /opt/mlflow/.env
+  
+  # Создаём виртуальное окружение
+  - sudo -u mlflow python3 -m venv /opt/mlflow/venv
+  
+  # Устанавливаем MLflow и зависимости
+  - /opt/mlflow/venv/bin/pip install --upgrade pip
+  - /opt/mlflow/venv/bin/pip install mlflow[extras] psycopg2-binary boto3
+  
+  # Настраиваем Nginx
+  - ln -s /etc/nginx/sites-available/mlflow /etc/nginx/sites-enabled/
+  - rm -f /etc/nginx/sites-enabled/default
+  - nginx -t && systemctl reload nginx
+  
+  # Запускаем MLflow service
+  - systemctl daemon-reload
+  - systemctl enable mlflow
+  - systemctl start mlflow
+  
+  # Проверка статуса
+  - sleep 10
+  - systemctl status mlflow --no-pager
+
+final_message: |
+  ✅ MLflow Server successfully installed!
+  
+  🌐 MLflow UI: http://$(curl -s ifconfig.me):5000
+  📊 Backend: PostgreSQL
+  💾 Artifacts: S3 (${s3_bucket})
+  
+  Check status: systemctl status mlflow
+  View logs: journalctl -u mlflow -f

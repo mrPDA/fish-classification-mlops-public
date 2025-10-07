@@ -1,0 +1,127 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fish-api
+  namespace: ml-inference
+  labels:
+    app: fish-api
+    component: inference
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: fish-api
+  template:
+    metadata:
+      labels:
+        app: fish-api
+        component: inference
+    spec:
+      containers:
+      - name: api
+        image: {{ REGISTRY }}/fish-classification-api:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: http
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://{{ MLFLOW_HOST }}:5000"
+        - name: REDIS_HOST
+          value: "redis.ml-inference.svc.cluster.local"
+        - name: REDIS_PORT
+          value: "6379"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "rc1a-u9toshudtllj41n7.mdb.yandexcloud.net:9091"
+        - name: KAFKA_TOPIC_REQUESTS
+          value: "fish-classification-requests"
+        - name: MODEL_NAME
+          value: "fish-classifier-efficientnet-b4"
+        - name: NUM_CLASSES
+          value: "17"
+        - name: IMAGE_SIZE
+          value: "224"
+        - name: CACHE_TTL
+          value: "3600"  # 1 hour
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            cpu: 500m
+            memory: 1Gi
+          limits:
+            cpu: 2
+            memory: 2Gi
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 5
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: fish-api
+  namespace: ml-inference
+  labels:
+    app: fish-api
+spec:
+  ports:
+  - port: 80
+    targetPort: 8000
+    name: http
+  selector:
+    app: fish-api
+  type: LoadBalancer
+---
+# HorizontalPodAutoscaler для автомасштабирования
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: fish-api-hpa
+  namespace: ml-inference
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: fish-api
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 30
+      - type: Pods
+        value: 5
+        periodSeconds: 30
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      selectPolicy: Min

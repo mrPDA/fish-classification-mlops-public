@@ -1,0 +1,126 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-worker
+  namespace: ml-inference
+  labels:
+    app: ml-worker
+    component: batch-processing
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: ml-worker
+  template:
+    metadata:
+      labels:
+        app: ml-worker
+        component: batch-processing
+    spec:
+      containers:
+      - name: worker
+        image: {{ REGISTRY }}/fish-classification-worker:latest
+        imagePullPolicy: Always
+        env:
+        - name: MLFLOW_TRACKING_URI
+          value: "http://{{ MLFLOW_HOST }}:5000"
+        - name: KAFKA_BOOTSTRAP_SERVERS
+          value: "rc1a-u9toshudtllj41n7.mdb.yandexcloud.net:9091"
+        - name: KAFKA_TOPIC_REQUESTS
+          value: "fish-classification-requests"
+        - name: KAFKA_TOPIC_RESULTS
+          value: "fish-classification-results"
+        - name: KAFKA_GROUP_ID
+          value: "ml-workers"
+        - name: KAFKA_AUTO_OFFSET_RESET
+          value: "earliest"
+        - name: POSTGRES_HOST
+          value: "{{ POSTGRES_HOST }}"
+        - name: POSTGRES_PORT
+          value: "6432"
+        - name: POSTGRES_DB
+          value: "mlops"
+        - name: POSTGRES_USER
+          value: "mlops_user"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: postgres-secrets
+              key: mlops-password
+        - name: MODEL_NAME
+          value: "fish-classifier-efficientnet-b4"
+        - name: NUM_CLASSES
+          value: "17"
+        - name: IMAGE_SIZE
+          value: "224"
+        - name: BATCH_SIZE
+          value: "32"
+        - name: LOG_LEVEL
+          value: "INFO"
+        resources:
+          requests:
+            cpu: 1
+            memory: 2Gi
+          limits:
+            cpu: 4
+            memory: 4Gi
+        livenessProbe:
+          exec:
+            command:
+            - python
+            - -c
+            - "import sys; sys.exit(0)"
+          initialDelaySeconds: 60
+          periodSeconds: 30
+---
+# HorizontalPodAutoscaler на основе Kafka lag
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ml-worker-hpa
+  namespace: ml-inference
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ml-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 120
+      policies:
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Max
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Pods
+        value: 1
+        periodSeconds: 120
+      selectPolicy: Min
+---
+# Secret для PostgreSQL (создаётся через Terraform output)
+apiVersion: v1
+kind: Secret
+metadata:
+  name: postgres-secrets
+  namespace: ml-inference
+type: Opaque
+stringData:
+  mlops-password: "{{ POSTGRES_MLOPS_PASSWORD }}"
